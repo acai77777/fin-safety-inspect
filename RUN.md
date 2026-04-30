@@ -36,41 +36,60 @@ This is the reference run reported in `docs/baseline-v0.2.0.md` (keyword 0.790, 
 
 ## 3. Cross-model baselines
 
-Each backbone is a separate run. Set the right env vars, then call `.\run_smoke.ps1 -Model <name>`. Each run produces a fresh `.eval` log under `logs/`. After all four runs, `python dump_cross_model.py` builds the comparison table.
+Each backbone is a separate run. The agent backbone rotates via `OPENAI_*`; the **judge backbone is pinned to DeepSeek-chat** via `JUDGE_*` so all comparisons are scored by the same judge.
 
-### 3.1 DeepSeek-chat (reference)
+Pin the judge once for the whole session:
+
+```powershell
+$env:JUDGE_API_KEY  = "<your-deepseek-key>"
+$env:JUDGE_BASE_URL = "https://api.deepseek.com/v1"
+```
+
+Then for each backbone, set `OPENAI_*` and run. Each run produces a fresh `.eval` log under `logs/`. After all runs, `python dump_cross_model.py` builds the comparison table.
+
+If `JUDGE_*` is unset, the judge falls back to `OPENAI_*` (preserves v0.2.0 single-backbone behavior — you only need `JUDGE_*` for cross-model runs).
+
+### 3.1 DeepSeek-chat (reference, agent and judge can share)
 
 ```powershell
 $env:OPENAI_API_KEY  = "<your-deepseek-key>"
 $env:OPENAI_BASE_URL = "https://api.deepseek.com/v1"
+# JUDGE_* not strictly required here; OPENAI_* fallback works.
 .\run_smoke.ps1 -Model "deepseek-chat"
 ```
 
-### 3.2 Qwen-plus (Alibaba DashScope)
+### 3.2 Qwen-plus (Alibaba DashScope) — agent on DashScope, judge on DeepSeek
 
 ```powershell
 $env:OPENAI_API_KEY  = "<your-dashscope-key>"
 $env:OPENAI_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+# JUDGE_* MUST be set — DashScope does not host deepseek-chat.
+$env:JUDGE_API_KEY   = "<your-deepseek-key>"
+$env:JUDGE_BASE_URL  = "https://api.deepseek.com/v1"
 .\run_smoke.ps1 -Model "qwen-plus"
 ```
 
-DashScope is OpenAI-compatible. Same `OPENAI_API_KEY` env name, just different value and base URL. If you want `qwen2.5-72b-instruct` or `qwen-max`, replace the `-Model` argument.
+DashScope is OpenAI-compatible. If you want `qwen2.5-72b-instruct` or `qwen-max`, replace `-Model`.
 
-### 3.3 GPT-4o-mini (via OpenRouter relay)
+### 3.3 GPT-4o-mini (via OpenRouter relay) — agent on relay, judge on DeepSeek
 
 ```powershell
 $env:OPENAI_API_KEY  = "<your-relay-key>"
 $env:OPENAI_BASE_URL = "https://www.openclaudecode.cn/v1"
+$env:JUDGE_API_KEY   = "<your-deepseek-key>"
+$env:JUDGE_BASE_URL  = "https://api.deepseek.com/v1"
 .\run_smoke.ps1 -Model "openai/gpt-4o-mini"
 ```
 
-OpenRouter model names contain a slash (`openai/gpt-4o-mini`). The script forwards this verbatim. If Inspect rejects the slashed name, check that your OpenRouter relay also exposes a non-slashed alias.
+OpenRouter model names contain a slash (`openai/gpt-4o-mini`). The script forwards verbatim. If your OpenRouter group rejects the slashed name, check the relay control panel for the supported model list.
 
-### 3.4 Claude 3.5 Sonnet (via OpenRouter relay)
+### 3.4 Claude 3.5 Sonnet (via OpenRouter relay) — agent on relay, judge on DeepSeek
 
 ```powershell
 $env:OPENAI_API_KEY  = "<your-relay-key>"
 $env:OPENAI_BASE_URL = "https://www.openclaudecode.cn/v1"
+$env:JUDGE_API_KEY   = "<your-deepseek-key>"
+$env:JUDGE_BASE_URL  = "https://api.deepseek.com/v1"
 .\run_smoke.ps1 -Model "anthropic/claude-3.5-sonnet"
 ```
 
