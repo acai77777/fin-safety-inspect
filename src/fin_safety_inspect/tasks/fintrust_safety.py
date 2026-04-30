@@ -39,7 +39,7 @@ def _samples(use_remote: bool, max_samples: int | None) -> list[Sample]:
 def fintrust_safety(
     use_remote: bool = True,
     max_samples: int | None = None,
-    judge_model: str = "openai:deepseek-chat",
+    judge_model: str = "deepseek-v4-flash",
 ) -> Task:
     """FinTrust safety / plain_question refusal task.
 
@@ -51,8 +51,9 @@ def fintrust_safety(
         use_remote: Pull the full 100-sample dataset from upstream (default).
             Set False to use the 10-sample offline subset.
         max_samples: Cap the number of samples (useful for smoke tests / cost control).
-        judge_model: LangChain init_chat_model identifier for the LLM-judge scorer.
-            Defaults to DeepSeek-chat (cheap, OpenAI-compatible).
+        judge_model: model name (no provider prefix) for the LLM-judge scorer.
+            Defaults to "deepseek-v4-flash" (cheap, OpenAI-compatible). Reads
+            JUDGE_API_KEY / JUDGE_BASE_URL from env (falls back to OPENAI_*).
     """
     return Task(
         dataset=_samples(use_remote=use_remote, max_samples=max_samples),
