@@ -24,6 +24,15 @@ FINTRUST_SAFETY_PLAIN_URL = (
     f"https://raw.githubusercontent.com/HughieHu/FinTrust/{FINTRUST_COMMIT}"
     "/safety/plain_question/plain_attack_evaluation_100.json"
 )
+FINTRUST_SAFETY_HAU_URL = (
+    f"https://raw.githubusercontent.com/HughieHu/FinTrust/{FINTRUST_COMMIT}"
+    "/safety/language_barrier/language_barrier_evaluation_100.json"
+)
+# v0.4 translation cache lives inside the package (not in $XDG_CACHE_HOME) so it
+# ships with the install. Translated by translate_fintrust_zh.py against the
+# pinned EN commit; re-run only when FINTRUST_COMMIT changes.
+_PKG_CACHE = Path(__file__).resolve().parent / "_cache"
+ZH_CACHE_PATH = _PKG_CACHE / f"fintrust_safety_zh_v0.4_{FINTRUST_COMMIT[:8]}.json"
 
 
 def _cache_path() -> Path:
@@ -141,4 +150,100 @@ def load_fintrust_safety(
     for category, prompts in data.items():
         for p in prompts:
             pairs.append((category, p))
+    return pairs
+
+
+# ---------------------------------------------------------------------------
+# v0.4: Chinese (machine-translated from EN) + Hausa (FinTrust language_barrier)
+# ---------------------------------------------------------------------------
+
+
+def load_fintrust_safety_zh() -> list[tuple[str, str]]:
+    """Load the v0.4 machine-translated Chinese prompts.
+
+    Returns the same (category, prompt) shape as load_fintrust_safety(), with
+    prompts in Simplified Chinese. The cache is shipped in-package
+    (datasets/_cache/) — re-create it by running translate_fintrust_zh.py
+    against the pinned FINTRUST_COMMIT.
+
+    Raises FileNotFoundError if the cache doesn't exist (you must run the
+    translation script first; we do not auto-translate on import).
+    """
+    if not ZH_CACHE_PATH.exists():
+        raise FileNotFoundError(
+            f"ZH cache not found: {ZH_CACHE_PATH}. Run translate_fintrust_zh.py first."
+        )
+    data: dict[str, list[str]] = json.loads(ZH_CACHE_PATH.read_text(encoding="utf-8"))
+    pairs: list[tuple[str, str]] = []
+    for category, prompts in data.items():
+        for p in prompts:
+            pairs.append((category, p))
+    return pairs
+
+
+def _hau_cache_path() -> Path:
+    base = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache"))
+    p = base / "fin_safety_inspect" / "fintrust"
+    p.mkdir(parents=True, exist_ok=True)
+    return p / f"safety_hau_{FINTRUST_COMMIT[:8]}.json"
+
+
+def _fetch_remote_hau(timeout: float = 15.0) -> list[dict] | None:
+    """Try to download FinTrust safety/language_barrier_evaluation_100.json. Returns None on failure."""
+    try:
+        req = urllib.request.Request(
+            FINTRUST_SAFETY_HAU_URL,
+            headers={"User-Agent": "fin-safety-inspect/0.4"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            return json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return None
+
+
+def load_fintrust_safety_hau(
+    *,
+    use_remote: bool = True,
+    force_refresh: bool = False,
+) -> list[tuple[str, str]]:
+    """Load FinTrust safety/language_barrier (Hausa, hau_Latn) prompts.
+
+    This is a SEPARATE 100-prompt set from plain_question — not a translation
+    of the EN baseline. Same 10 topic categories but different prompts.
+    See docs/three-language-baseline-v0.4.md for the alignment caveat.
+
+    Args:
+        use_remote: If True, fetch upstream and cache locally on first call.
+        force_refresh: If True, re-download even if cache exists.
+
+    Returns:
+        List of (category, hau_Latn_prompt) tuples. Length 100 when remote
+        works; raises RuntimeError otherwise (no embedded Hausa fallback).
+    """
+    data: list[dict] | None = None
+    cache = _hau_cache_path()
+
+    if cache.exists() and not force_refresh:
+        try:
+            data = json.loads(cache.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data = None
+
+    if data is None and use_remote:
+        data = _fetch_remote_hau()
+        if data is not None:
+            cache.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    if data is None:
+        raise RuntimeError(
+            f"HAU prompts unavailable: failed to fetch {FINTRUST_SAFETY_HAU_URL} "
+            "and no cache. Run online once with use_remote=True to populate the cache."
+        )
+
+    pairs: list[tuple[str, str]] = []
+    for item in data:
+        topic = item.get("topic", "?")
+        hau = item.get("translated", {}).get("hau_Latn", "").strip().strip('"')
+        if hau:
+            pairs.append((topic, hau))
     return pairs

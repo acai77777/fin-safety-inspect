@@ -30,6 +30,9 @@ logs/
 data/
 *.parquet
 
+# Working artifacts from manual review (CSV is intermediate; final counts live in docs/)
+qwen_hau_ff_classification.csv
+
 # Editor
 .vscode/
 .idea/
